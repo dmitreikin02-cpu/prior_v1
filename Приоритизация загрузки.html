@@ -1525,6 +1525,120 @@
                     console.log('No cubic data found, second sheet not created');
                 }
                 
+                // Create Summary sheet
+                const summaryData = [];
+                
+                // Sort processed data by store number, brand, and internal sequence
+                const sortedData = [...processedData].sort((a, b) => {
+                    if (a.storeNumber !== b.storeNumber) {
+                        return String(a.storeNumber).localeCompare(String(b.storeNumber));
+                    }
+                    if (a.brand !== b.brand) {
+                        return String(a.brand).localeCompare(String(b.brand));
+                    }
+                    return String(a.internalSequenceText).localeCompare(String(b.internalSequenceText));
+                });
+                
+                // Group data by store, brand, and internal sequence
+                let currentStore = null;
+                let currentBrand = null;
+                let currentSequence = null;
+                let storeTotal = 0;
+                let brandSequenceTotal = 0;
+                
+                sortedData.forEach((row, index) => {
+                    const quantity = parseFloat(row.quantity) || 0;
+                    
+                    // Check if we need to add a brand+sequence subtotal
+                    if (currentStore !== null && 
+                        (currentStore !== row.storeNumber || 
+                         currentBrand !== row.brand || 
+                         currentSequence !== row.internalSequenceText)) {
+                        // Add brand+sequence subtotal
+                        summaryData.push({
+                            '№ магазина': '',
+                            'Бренд/ТЦ': currentBrand,
+                            'Последов-ть внутри Бренда': currentSequence,
+                            'Коммент.': 'ИТОГО',
+                            'Кол-во кор': brandSequenceTotal
+                        });
+                        brandSequenceTotal = 0;
+                    }
+                    
+                    // Check if we need to add a store total
+                    if (currentStore !== null && currentStore !== row.storeNumber) {
+                        // Add store total
+                        summaryData.push({
+                            '№ магазина': currentStore,
+                            'Бренд/ТЦ': '',
+                            'Последов-ть внутри Бренда': '',
+                            'Коммент.': 'ИТОГО по магазину',
+                            'Кол-во кор': storeTotal
+                        });
+                        // Add empty row for separation
+                        summaryData.push({
+                            '№ магазина': '',
+                            'Бренд/ТЦ': '',
+                            'Последов-ть внутри Бренда': '',
+                            'Коммент.': '',
+                            'Кол-во кор': ''
+                        });
+                        storeTotal = 0;
+                    }
+                    
+                    // Add detail row
+                    summaryData.push({
+                        '№ магазина': row.storeNumber,
+                        'Бренд/ТЦ': row.brand,
+                        'Последов-ть внутри Бренда': row.internalSequenceText,
+                        'Коммент.': row.comment,
+                        'Кол-во кор': quantity
+                    });
+                    
+                    // Update running totals
+                    brandSequenceTotal += quantity;
+                    storeTotal += quantity;
+                    currentStore = row.storeNumber;
+                    currentBrand = row.brand;
+                    currentSequence = row.internalSequenceText;
+                    
+                    // Check if this is the last row
+                    if (index === sortedData.length - 1) {
+                        // Add final brand+sequence subtotal
+                        summaryData.push({
+                            '№ магазина': '',
+                            'Бренд/ТЦ': currentBrand,
+                            'Последов-ть внутри Бренда': currentSequence,
+                            'Коммент.': 'ИТОГО',
+                            'Кол-во кор': brandSequenceTotal
+                        });
+                        // Add final store total
+                        summaryData.push({
+                            '№ магазина': currentStore,
+                            'Бренд/ТЦ': '',
+                            'Последов-ть внутри Бренда': '',
+                            'Коммент.': 'ИТОГО по магазину',
+                            'Кол-во кор': storeTotal
+                        });
+                    }
+                });
+                
+                if (summaryData.length > 0) {
+                    const ws3 = XLSX.utils.json_to_sheet(summaryData);
+                    const summaryColWidths = [
+                        { wch: 15 },  // № магазина
+                        { wch: 25 },  // Бренд/ТЦ
+                        { wch: 25 },  // Последов-ть внутри Бренда
+                        { wch: 30 },  // Коммент.
+                        { wch: 12 }   // Кол-во кор
+                    ];
+                    ws3['!cols'] = summaryColWidths;
+                    XLSX.utils.book_append_sheet(wb, ws3, 'Summary');
+                    console.log('Summary sheet created with', summaryData.length, 'rows');
+                } else {
+                    console.log('No summary data found, summary sheet not created');
+                }
+                
                 const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
                 XLSX.writeFile(wb, `Приоритизация_загрузки_${timestamp}.xlsx`);
                 showMessage('Excel файл успешно скачан!', 'success');
