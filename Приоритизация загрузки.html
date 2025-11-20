@@ -1334,6 +1334,46 @@
             }
             document.getElementById('previewSection').classList.remove('hidden');
         }
+        function applySheetStyling(ws, hasFilter = true) {
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            
+            // Add autofilter
+            if (hasFilter) {
+                ws['!autofilter'] = { ref: XLSX.utils.encode_range({
+                    s: { r: 0, c: 0 },
+                    e: { r: range.e.r, c: range.e.c }
+                })};
+            }
+            
+            // Style all cells with borders and apply bold to header row
+            for (let row = range.s.r; row <= range.e.r; row++) {
+                for (let col = range.s.c; col <= range.e.c; col++) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+                    if (!ws[cellAddress]) continue;
+                    
+                    const cell = ws[cellAddress];
+                    if (!cell.s) cell.s = {};
+                    
+                    // Add borders to all cells
+                    cell.s.border = {
+                        top: { style: 'thin', color: { rgb: '000000' } },
+                        bottom: { style: 'thin', color: { rgb: '000000' } },
+                        left: { style: 'thin', color: { rgb: '000000' } },
+                        right: { style: 'thin', color: { rgb: '000000' } }
+                    };
+                    
+                    // Make header row bold
+                    if (row === 0) {
+                        cell.s.font = { bold: true };
+                        if (!cell.s.fill) {
+                            cell.s.fill = { fgColor: { rgb: 'D3D3D3' } };
+                        }
+                    }
+                }
+            }
+            
+            return ws;
+        }
         function downloadExcel() {
             if (!processedData || processedData.length === 0) {
                 showMessage('Нет данных для экспорта', 'error');
@@ -1423,6 +1463,9 @@
                         ws['!rows'][row].hpx = 30; // Height in pixels
                     }
                 }
+                
+                // Apply styling: borders, bold headers, autofilter
+                applySheetStyling(ws, true);
                 
                 const cubicSheetData = [];
                 const transportDataMap = new Map();
@@ -1519,6 +1562,9 @@
                         { wch: 15 }
                     ];
                     ws2['!cols'] = cubicColWidths;
+                    
+                    // Apply styling: borders, bold headers, autofilter
+                    applySheetStyling(ws2, true);
                     XLSX.utils.book_append_sheet(wb, ws2, 'Кубатура');
                     console.log('Second sheet "Кубатура" created with', cubicSheetData.length, 'rows');
                 } else {
@@ -1633,6 +1679,10 @@
                         { wch: 12 }   // Кол-во кор
                     ];
                     ws3['!cols'] = summaryColWidths;
+                    
+                    // Apply styling: borders, bold headers, autofilter
+                    applySheetStyling(ws3, true);
+                    
                     XLSX.utils.book_append_sheet(wb, ws3, 'Summary');
                     console.log('Summary sheet created with', summaryData.length, 'rows');
                 } else {
