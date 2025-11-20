@@ -1574,32 +1574,74 @@
                 // Create Summary sheet
                 const summaryData = [];
                 
-                // Sort processed data by store number, brand, and internal sequence
-                const sortedData = [...processedData].sort((a, b) => {
+                // Function to categorize by comment
+                function categorizeByComment(comment) {
+                    const lowerComment = (comment || '').toString().toLowerCase();
+                    if (lowerComment.includes('текстиль')) {
+                        return 'Текстиль';
+                    } else if (lowerComment.includes('трансфер') || lowerComment.includes('posm') || lowerComment.includes('оборудование')) {
+                        return 'Трансфер/Posm/Оборудование';
+                    } else if (lowerComment.includes('парфюм')) {
+                        return 'Парфюм';
+                    } else if (lowerComment.includes('догруз')) {
+                        return 'Догруз';
+                    } else {
+                        return 'Прочее';
+                    }
+                }
+                
+                // Aggregate data by store, brand, sequence and category
+                const aggregatedData = new Map();
+                
+                processedData.forEach(row => {
+                    const storeNumber = row.storeNumber;
+                    const brand = row.brand;
+                    const sequence = row.internalSequenceText;
+                    const category = categorizeByComment(row.comment);
+                    const quantity = parseFloat(row.quantity) || 0;
+                    
+                    const key = `${storeNumber}|||${brand}|||${sequence}|||${category}`;
+                    
+                    if (!aggregatedData.has(key)) {
+                        aggregatedData.set(key, {
+                            storeNumber,
+                            brand,
+                            sequence,
+                            category,
+                            quantity: 0
+                        });
+                    }
+                    
+                    aggregatedData.get(key).quantity += quantity;
+                });
+                
+                // Sort aggregated data
+                const sortedAggregated = Array.from(aggregatedData.values()).sort((a, b) => {
                     if (a.storeNumber !== b.storeNumber) {
                         return String(a.storeNumber).localeCompare(String(b.storeNumber));
                     }
                     if (a.brand !== b.brand) {
                         return String(a.brand).localeCompare(String(b.brand));
                     }
-                    return String(a.internalSequenceText).localeCompare(String(b.internalSequenceText));
+                    if (a.sequence !== b.sequence) {
+                        return String(a.sequence).localeCompare(String(b.sequence));
+                    }
+                    return a.category.localeCompare(b.category);
                 });
                 
-                // Group data by store, brand, and internal sequence
+                // Build summary with totals
                 let currentStore = null;
                 let currentBrand = null;
                 let currentSequence = null;
                 let storeTotal = 0;
                 let brandSequenceTotal = 0;
                 
-                sortedData.forEach((row, index) => {
-                    const quantity = parseFloat(row.quantity) || 0;
-                    
+                sortedAggregated.forEach((row, index) => {
                     // Check if we need to add a brand+sequence subtotal
                     if (currentStore !== null && 
                         (currentStore !== row.storeNumber || 
                          currentBrand !== row.brand || 
-                         currentSequence !== row.internalSequenceText)) {
+                         currentSequence !== row.sequence)) {
                         // Add brand+sequence subtotal
                         summaryData.push({
                             '№ магазина': '',
@@ -1632,24 +1674,24 @@
                         storeTotal = 0;
                     }
                     
-                    // Add detail row
+                    // Add aggregated row by category
                     summaryData.push({
                         '№ магазина': row.storeNumber,
                         'Бренд/ТЦ': row.brand,
-                        'Последов-ть внутри Бренда': row.internalSequenceText,
-                        'Коммент.': row.comment,
-                        'Кол-во кор': quantity
+                        'Последов-ть внутри Бренда': row.sequence,
+                        'Коммент.': row.category,
+                        'Кол-во кор': row.quantity
                     });
                     
                     // Update running totals
-                    brandSequenceTotal += quantity;
-                    storeTotal += quantity;
+                    brandSequenceTotal += row.quantity;
+                    storeTotal += row.quantity;
                     currentStore = row.storeNumber;
                     currentBrand = row.brand;
-                    currentSequence = row.internalSequenceText;
+                    currentSequence = row.sequence;
                     
                     // Check if this is the last row
-                    if (index === sortedData.length - 1) {
+                    if (index === sortedAggregated.length - 1) {
                         // Add final brand+sequence subtotal
                         summaryData.push({
                             '№ магазина': '',
